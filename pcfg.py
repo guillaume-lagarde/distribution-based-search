@@ -260,22 +260,6 @@ def probability(term, proba):
     return res*proba[symbol]
 
 
-# def put_random_weight(G):
-#     '''
-#     return a grammar with the same structure but with random weights on the transitions
-#     '''
-#     G2 = copy.deepcopy(G)
-#     for X in G2.rules:
-#         out_degree = len(G2.rules[X])
-#         weights = [random.random() for _ in range(out_degree)]
-#         S = sum(weights)
-#         weights = [e/S for e in weights]
-#         for i in range(out_degree):
-#             G2.rules[X][i][2] = weights[i]
-#         # G2.rules[X].sort(key = lambda x: -x[2])
-#     G2.restart()
-#     return G2
-
 def put_random_weight(G, alpha = 0.9):
     '''
     return a grammar with the same structure but with random weights on the transitions

@@ -11,27 +11,14 @@ import itertools
 # ----------------------------------- 
 
 
-# def get_value(t, i):
-#     '''
-#     get the value in term t given by the tuple of indice i
-#     '''
-#     nt = copy.deepcopy(t)
-#     nt = t
-#     for i in i:
-#         nt = nt[i]
-#     return nt
-
-# def set_value(t, i, v):
-#     '''
-#     set the value in term t at position i (a tuple) to v
-#     '''
-
-#     ref = t
-#     for j in range(len(i)-1):
-#         ref = ref[i[j]]
-#     ref[i[-1]] = v
-
 def menon_search(G: PCFG, scale_factor: float):
+    '''
+    A generator for terms using Menon's strategy: it outputs all terms
+    with a probability greater than or equal to a given threshold;
+    then it starts again the process with a smaller threshold obtained
+    by multiplying the current one by the scale factor.
+
+    '''
     threshold = 0.1
     dictionary = {}
     seen = set()
