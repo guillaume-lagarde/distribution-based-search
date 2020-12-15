@@ -10,7 +10,7 @@ import itertools
 # --------- HEAP ALGORITHM ----------
 # -----------------------------------
 
-def heap_search(G: PCFG):
+def heap_search(G: PCFG, *param):
     H = heap_search_object(G)
     return H.generator()
 
@@ -27,7 +27,7 @@ class heap_search_object:
         self.succ = {S: {} for S in self.symbols} # for each symbol, a hash table with the successor of any term already computed
         self.seen = set() # terms already seens
 
-        self.proba = G.proba
+        self.G = G
         self.arities = G.arities
         self.current = () # current program
         self.pointer = 0
@@ -105,7 +105,7 @@ class heap_search_object:
                 hash_new = str([f, [id(e) for e in new_term[1]]]) # compressed hash [f, [id_ref1, id_ref2, ...]]
                 # hash_new = str(new_term)  # We can change this for a smaller hash, just ['f', [reference1, reference2, etc.. ]], should be sufficient and much faster. See the previous line
                 if hash_new not in self.seen:
-                    heappush(self.heaps[S], (-probability(new_term, self.proba), new_term))
+                    heappush(self.heaps[S], (-self.G.probability(new_term), new_term))
                 self.seen.add(hash_new)
 
         return succ_term

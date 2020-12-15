@@ -10,7 +10,10 @@ class PCFG:
     '''
     Object that represents a probabilistic context-free grammar
     start: a start symbol
-    rules: a dictionary of type {'V': [['F',(S1,S2,S3,...), w], ['G', ...], ...]} where the list rules['V'] is supposed to be ordered with respect to the w, and (S1,S2,..) is interpreted as the argument of 'F' and w is the weight of the derivation V -> F(S1,S2,..)
+    rules: a dictionary of type {'V': l}
+    with l a list of triples ['F',l', w] with F a function symbol, l' a list of non-terminals, and w a weight
+    for l' = (S1,S2,..), this represents the derivation V -> F(S1,S2,..) with weight w
+    We assume that the derivations are sorted in non-decreasing order of probability
     '''
     def __init__(self, start: str, rules: dict):
         self.start = start
@@ -53,10 +56,17 @@ class PCFG:
         
     def collect(self, X, seen):
         seen.add(X)
-        for f, args,w in self.rules[X]:
+        for f, args, w in self.rules[X]:
             for a in (set(args) - seen):
                 self.collect(a, seen)
 
+    def probability(self, term):
+#        print(term)
+        res = 1
+        symbol, sub_terms = term[0], term[1]
+        for t in sub_terms:
+            res *= self.probability(t)
+        return res * self.proba[symbol]
 
 # -----------------------------------
 # ------------ EXAMPLES -------------
@@ -83,12 +93,6 @@ rules = {
     'S2':[['x',[],0.6],
           ['y',[],0.4]]
 }
-
-# rules = {
-#     'S0': [['f1',['S0','S1'], 0.8],
-#            ['f2', ['S1'], 0.2]],
-#     'S1': [['blabla',[],0.6], ['blibli',[],0.4]]
-# }
 
 G = PCFG('S0', rules)
 
@@ -120,6 +124,38 @@ def set_value(t, i, v):
     ref[i[-1]] = v
 
 
+def sample_rule(cumulative):
+    low, high = 0, len(cumulative)-1
+    threshold = random.random()
+    
+    while low <= high:
+        mid = (high+low)//2
+        if cumulative[mid] < threshold:
+            low = mid+1
+        else:
+            high = mid-1
+
+    res = mid+1 if cumulative[mid] < threshold else mid
+    return res
+        
+def sample_derivation(start: str , G: PCFG, cumulatives: dict):
+    f, symbols, w = G.rules[start][sample_rule(cumulatives[start])]
+    args_f = []
+    for S in symbols:
+        args_f+=[sample_derivation(S, G, cumulatives)]
+    return [f,args_f]
+
+def sampling(G: PCFG):
+    '''
+    A generator that samples terms according to the PCFG G
+    '''
+    # pre-processing to compute the cumulative distribution for any derivation rule from a given symbol
+    cumulatives = G.cumulatives
+    S0 = G.start
+    while True:
+        yield sample_derivation(S0, G, cumulatives)
+
+
 def set_max_tuple(G: PCFG, X, seen, dictionary):
     '''
     fill the given dictionary with, for each symbol X the pair (max tuple from X, max proba from X)
@@ -148,88 +184,6 @@ def set_max_tuple(G: PCFG, X, seen, dictionary):
             max_proba = weight
     dictionary[X] = (max_t, max_proba)
 
-
-
-def compute_Z(G):
-    '''
-    take a WCFG and compute the partition functions Z as a dictionary {X: Z^X}
-    '''
-    Z = {X: 1 for X in G.rules}
-    for i in range(1000):
-        for X in G.rules:
-            s = 0
-            for f, args, w in G.rules[X]:
-                prod = w
-                for symbol in args:
-                    prod*=Z[symbol]
-                s+=prod
-            Z[X] = s
-        return Z
-
-    
-def alpha_PCFG(G: PCFG, power = 1/2, threshold = 1000000):
-    '''
-    Output a PCFG that is G^alpha. If Z > threshold, return -1
-    '''
-
-    start = G.start
-    partition_function = {X: 1 for X in G.rules}
-
-    G = copy.deepcopy(G)
-    for X in G.rules:
-        for i in range(len(G.rules[X])):
-            G.rules[X][i][2] = G.rules[X][i][2]**(power)
-    
-    for i in range(100):
-        for X in G.rules:
-            s = 0
-            for f, args, w in G.rules[X]:
-                prod = w
-                for symbol in args:
-                    prod*=partition_function[symbol]
-                s+=prod
-            partition_function[X] = s
-    # print(partition_function[start])
-    if partition_function[start] > threshold:
-        print("sum sqrt(G) probably divergent")
-        return -1
-        
-    r = copy.deepcopy(G.rules)
-    for X in r:
-        for i in range(len(r[X])):
-            for s in r[X][i][1]:
-                r[X][i][2]*=partition_function[s]
-            r[X][i][2]*=(1/partition_function[X])
-            
-    return PCFG(start,r)
-
-def sqrt_PCFG(G: PCFG, threshold = 20):
-    return alpha_PCFG(G, 1/2)
-
-
-def find_best_alpha(G: PCFG, threshold = 20, accuracy = 0.01 ):
-    alpha_inf = 1/2
-    alpha_sup = 1
-    res = -1
-
-    # first check if 1/2 is ok
-    G2 = sqrt_PCFG(G, threshold = threshold)
-    if G2 != -1: return G2, 1/2
-    
-    while alpha_sup - alpha_inf > accuracy:
-        alpha = alpha_inf+(alpha_sup- alpha_inf)/2
-        G2 = alpha_PCFG(G, power=alpha, threshold = threshold)
-        if G2 == -1:
-            alpha_inf = alpha
-        else:
-            alpha_sup = alpha
-            res = G2
-    if res == -1:
-        res = alpha_PCFG(G, power=alpha_sup, threshold = threshold)
-    return res, alpha_sup
-
-
-
 def cfg_iterate(G: PCFG, d):
     for S in G.rules:
         for f, args, w in G.rules[S]:
@@ -249,16 +203,21 @@ def generate_all_programs(G: PCFG, n = 1, only_first = True):
         return set([str(p) for p in d[S]])
     return d
 
-def probability(term, proba):
-    res = 1
-    symbol, sub_terms = term[0], term[1]
-    # print("SUBTERM", sub_terms)
-    for t in sub_terms:
-        # print("MM",t)
-        res*=probability(t, proba)
-        
-    return res*proba[symbol]
-
+# def put_random_weight(G):
+#     '''
+#     return a grammar with the same structure but with random weights on the transitions
+#     '''
+#     G2 = copy.deepcopy(G)
+#     for X in G2.rules:
+#         out_degree = len(G2.rules[X])
+#         weights = [random.random() for _ in range(out_degree)]
+#         S = sum(weights)
+#         weights = [e/S for e in weights]
+#         for i in range(out_degree):
+#             G2.rules[X][i][2] = weights[i]
+#         # G2.rules[X].sort(key = lambda x: -x[2])
+#     G2.restart()
+#     return G2
 
 def put_random_weight(G, alpha = 0.9):
     '''

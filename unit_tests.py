@@ -1,9 +1,14 @@
 import unittest
 from pcfg import *
+
+# Import algorithms
+from threshold_search import threshold
+from sort_and_add import sort_and_add
+from a_star import a_star
+from sqrt_sampling import sqrt_sampling
 from heap_search import heap_search
-from menon_search import menon
-from a_star_search import a_star
-from sampling_search import sampling
+
+
 from benchmarks.flashfill import *
 from benchmarks.deepcoder import *
 from benchmarks.circuits import *
@@ -20,13 +25,11 @@ class TestSum(unittest.TestCase):
         N = 25000 # number of program to be output by the algorithm
         K = 3000 # number of sampling
         G = PCFG('start_0', rules_finite_flashfill)
-        # G = PCFG('start', rules_circuits)
         G = put_random_weight(G)
         G.restart()
 
         S = sampling(G)
         H = heap_search(G)
-        # gen_H = H.generator()
         seen_sampling = set()
         seen_heaps = set()
 
@@ -34,9 +37,8 @@ class TestSum(unittest.TestCase):
         for i in range(N):
             if (100*i//N) != (100*(i+1)//N):
                 print(100*(i+1)//N, " %")
-            # t = H.next()
             t = next(H)
-            proba_t = probability(t, G.proba)
+            proba_t = G.probability(t)
             self.assertLessEqual(proba_t, proba_current) # check if in decreasing order
             proba_current = proba_t
             seen_heaps.add(str(t))
@@ -45,7 +47,7 @@ class TestSum(unittest.TestCase):
         
         while len(seen_sampling) < K:
             t = next(S)
-            proba_t = probability(t,G.proba)
+            proba_t = G.probability(t)
             if proba_t > min_proba:
                 seen_sampling.add(str(t))
 
@@ -63,7 +65,6 @@ class TestSum(unittest.TestCase):
         N = 15000 # number of program to be output by the algorithm
         K = 1000 # number of sampling        
         G = PCFG('start_0', rules_finite_flashfill)
-        # G = PCFG('start', rules_circuits)
         G = put_random_weight(G)
         G.restart()
 
@@ -77,7 +78,7 @@ class TestSum(unittest.TestCase):
             if (100*i//N) != (100*(i+1)//N):
                 print(100*(i+1)//N, " %")
             t = next(A)
-            proba_t = probability(t, G.proba)
+            proba_t = G.probability(t)
             self.assertLessEqual(proba_t, proba_current) # check if in decreasing order
             proba_current = proba_t
             seen_astar.add(str(t))
@@ -86,7 +87,7 @@ class TestSum(unittest.TestCase):
         
         while len(seen_sampling) < K:
             t = next(S)
-            proba_t = probability(t,G.proba)
+            proba_t = G.probability(t)
             if proba_t > min_proba:
                 seen_sampling.add(str(t))
 
@@ -94,12 +95,12 @@ class TestSum(unittest.TestCase):
             
         self.assertEqual(0, len(diff))
 
-    def test_menon(self):
+    def test_threshold(self):
         '''
-        Test if Menon does not miss any program and output programs above the given threshold
+        Test if Threshold does not miss any program and output programs above the given threshold
         '''
 
-        threshold = 0.000001
+        THR = 0.000001
         G = PCFG('start_0', rules_finite_flashfill)
         G = put_random_weight(G)
         G.restart()
@@ -112,29 +113,29 @@ class TestSum(unittest.TestCase):
         max_weights = {X:dictionary[X][1] for X in G.rules}
         # End max proba
 
-        M = menon(G, threshold, max_weights)
+        M = threshold(G, THR, max_weights)
         
-        seen_menon = set()
+        seen_threshold = set()
 
         while True:
             try:
                 t = next(M)
-                proba_t = probability(t, G.proba)
-                self.assertLessEqual(threshold, proba_t) # check if the program is above threshold
-                seen_menon.add(str(t))
+                proba_t = G.probability(t)
+                self.assertLessEqual(THR, proba_t) # check if the program is above THR
+                seen_threshold.add(str(t))
             except StopIteration:
                 break
-        K = len(seen_menon)//2
+        K = len(seen_threshold)//2
 
         S = sampling(G)
         seen_sampling = set()
         while len(seen_sampling) < K:
             t = next(S)
-            proba_t = probability(t,G.proba)
-            if proba_t >= threshold:
+            proba_t = G.probability(t)
+            if proba_t >= THR:
                 seen_sampling.add(str(t))
 
-        diff = seen_sampling - seen_menon
+        diff = seen_sampling - seen_threshold
         
         self.assertEqual(0, len(diff))
             
@@ -147,21 +148,18 @@ class TestSum(unittest.TestCase):
 
         G = PCFG('start_0', rules_finite_flashfill)
         G = PCFG('start', rules_deepcoder)
-        # G = PCFG('start', rules_circuits)
         G = put_random_weight(G)
         G.restart()
 
         A = a_star(G)
         H = heap_search(G)
-        # gen_H = H.generator()
         for i in range(N):
             if (100*i//N) != (100*(i+1)//N):
                 print(100*(i+1)//N, " %")
-            # t_heap = H.next()
             t_heap = next(H)
             t_astar = next(A)
-            p1 = probability(t_heap, G.proba)
-            p2 = probability(t_astar, G.proba)
+            p1 = G.probability(t_heap)
+            p2 = G.probability(t_astar)
             self.assertAlmostEqual(p1, p2, places = 14)
             
     
@@ -176,7 +174,6 @@ class TestSum(unittest.TestCase):
         G.restart()
 
         H = heap_search(G) # to generate the L first programs
-        # gen_H = H.generator()
         
         S = sampling(G)
         programs = [next(H) for _ in range(L)]
@@ -191,10 +188,9 @@ class TestSum(unittest.TestCase):
                 count[t_hashed]+=1
 
         for t in programs:
-            proba_t = probability(t, G.proba)
-            self.assertAlmostEqual(proba_t,count[str(t)]/K, places = 3)
+            proba_t = G.probability(t)
+            self.assertAlmostEqual(proba_t,count[str(t)]/K, places = 2)
 
-    # TODO: test sqrt(G)
         
         
 if __name__ == '__main__':

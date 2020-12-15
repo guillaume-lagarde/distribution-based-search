@@ -7,19 +7,11 @@ import timeit
 import itertools
 
 # -----------------------------------
-# ------ MENON ALGORITHM ---------
+# ------ THRESHOLD ALGORITHM ---------
 # ----------------------------------- 
 
-
-def menon_search(G: PCFG, scale_factor: float):
-    '''
-    A generator for terms using Menon's strategy: it outputs all terms
-    with a probability greater than or equal to a given threshold;
-    then it starts again the process with a smaller threshold obtained
-    by multiplying the current one by the scale factor.
-
-    '''
-    threshold = 0.1
+def threshold_search(G: PCFG, scale_factor: float):
+    current_threshold = 0.1
     dictionary = {}
     seen = set()
     
@@ -28,16 +20,16 @@ def menon_search(G: PCFG, scale_factor: float):
         
     max_weights = {X:dictionary[X][1] for X in G.rules}
         
-    gen = menon(G, threshold, max_weights)
+    gen = threshold(G, current_threshold, max_weights)
     while True:
         try:
             yield next(gen)
         except StopIteration:
-            threshold/=scale_factor
-            gen = menon(G, threshold, max_weights)
+            current_threshold/=scale_factor
+            gen = threshold(G, current_threshold, max_weights)
     
 
-def menon(G : PCFG, threshold: float, max_weights):
+def threshold(G : PCFG, threshold: float, max_weights):
     '''
     A generator that samples all terms with proba greater than or equal to threshold
     '''
@@ -67,3 +59,4 @@ def menon(G : PCFG, threshold: float, max_weights):
                     yield new_term[0]# , new_max_weight
                 else:
                     T.append((new_term,new_indices, new_max_weight)) #weight of derivation* max all new symbols / max symbol that has been replaced
+
