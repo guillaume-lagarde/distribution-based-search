@@ -11,7 +11,7 @@ import itertools
 # -----------------------------------
 def a_star(G : PCFG, *param):
     '''
-    A generator that samples all terms with proba greater than or equal to threshold
+    A generator that outputs all terms using A* strategy
     '''
 
     dictionary = {}
